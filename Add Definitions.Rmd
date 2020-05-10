@@ -1,0 +1,99 @@
+---
+title: "Text to Speech"
+output: html_notebook
+---
+
+This notebook receives a spreadsheet of words and definitions, and generates audio files to be listened to while running.
+
+```{r setup}
+library(tidyverse)
+library(openxlsx)
+library(httr)
+'%ni%' <- Negate('%in%')
+
+# Oxford dictionary
+base.url = "https://od-api.oxforddictionaries.com/api/v2"
+app.id = "26225072"
+app.key = "7439148f7c487a6e3534b5af2849c68d"
+language.code = "en-us"
+
+# spreadsheets
+input.xlsx = "barron3500.xlsx"
+output.xlsx = "oxford.xlsx"
+```
+
+# Read in words
+
+```{r}
+words = read.xlsx(input.xlsx) %>%
+  filter(Keep==1) %>%
+  select(-Keep)
+
+oxford = read.xlsx(output.xlsx)
+```
+
+# Make API calls to lemmas
+
+```{r}
+get.lemmas = function(word) {
+  url = file.path(base.url, "lemmas", language.code, str_to_lower(word))
+  cat("url:", url, "\n")
+  r = GET(url,
+          add_headers(app_id=app.id, app_key=app.key))
+  c = content(r) %>% unlist
+  if (r$status_code == 200) {
+    response = c
+  } else {
+    response = paste("ERROR:", c)
+  }
+  response
+}
+# l = get.lemmas("hello")
+```
+
+# Make API calls to definitions dictionary
+
+```{r}
+get.definition = function(word) {
+  url = file.path(base.url, "entries", language.code, str_to_lower(word))
+  # cat("url:", url, "\n")
+  r = GET(url,
+          add_headers(app_id=app.id, app_key=app.key),
+          query = list(fields="definitions"))
+  if (r$status_code == 200) {
+    c = content(r) %>% unlist
+    if ("results.lexicalEntries.entries.senses.definitions" %in% names(c)) {
+      definition = c[["results.lexicalEntries.entries.senses.definitions"]]
+    } else {
+      definition = paste("ERROR: couldn't get definition")
+    }
+  } else {
+    definition = paste("ERROR: status code", r$status_code)
+  }
+  # Sys.sleep(1)
+  definition
+}
+# def = get.definition("connive")
+```
+
+# Add definitions to Oxford df where words are missing
+
+```{r}
+for (i in 1:nrow(words)) {
+  word = words$Word[[i]]
+  if (word %ni% oxford$Word) {
+    definition = get.definition(word)
+    new.row = data.frame(Word = c(word),
+                         Definition = c(definition))
+    oxford = bind_rows(oxford, new.row)
+    cat(word, ": \t", definition, "\n")
+  }
+}
+```
+
+# Save Oxford definitions
+
+```{r}
+write.xlsx(oxford, output.xlsx, asTable=T)
+```
+

@@ -1,0 +1,8 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+audio/*
+*.xlsx
+*.nb.html
+*.json

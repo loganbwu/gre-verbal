@@ -1,0 +1,85 @@
+---
+title: "Text to Speech"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(openxlsx)
+library(googleLanguageR)
+# library(tuneR)
+'%ni%' <- Negate('%in%')
+gl_auth("GRE Verbal Text to Speech-fa1750c58bd7.json")
+
+voice.names = c(paste0("en-AU-Wavenet-", LETTERS[1:4]),
+                paste0("en-GB-Wavenet-", LETTERS[1:4]),
+                paste0("en-US-Wavenet-", LETTERS[1:4]))
+                
+# spreadsheets
+input.xlsx = "barron3500.xlsx"
+output.xlsx = "oxford.xlsx"
+```
+
+# Read data
+
+```{r}
+words = read.xlsx(input.xlsx) %>%
+  filter(Keep==1) %>%
+  select(-Keep)
+
+oxford.processed = read.xlsx(output.xlsx) %>%
+  filter(Definition %>% str_detect("^ERROR") %>% `!`) %>%
+  rename(Oxford.Definition = Definition)
+```
+
+# Process data
+
+```{r}
+text = words %>%
+  left_join(oxford.processed, by="Word") %>%
+  mutate(Spelling = purrr::map_chr(Word, ~strsplit(., "")[[1]] %>% paste(collapse="-"))) %>%
+  select(Word, Spelling, Oxford.Definition, everything()) %>%
+  unite(Script, sep=". ", remove=F, na.rm=T) %>%
+  mutate(Script = Script %>% str_replace_all("\\.+", "\\."))
+  
+glimpse(text)
+```
+
+# Get audio files
+
+```{r}
+for (i in 1:nrow(text)) {
+  voice = sample(voice.names, 1)
+  country = voice %>% str_extract("AU|GB|US")
+  filename = file.path("audio", country, paste0(text$Word[[i]], ".mp3"))
+  if (!file.exists(filename)) {
+    gl_talk(text$Script[[i]], name=voice, output=filename, audioEncoding = "MP3")
+  }
+}
+```
+
+# Combine word files together
+
+```{r, eval=F}
+all.files = list.files("audio", "\\.mp3$", full.names=T)
+
+n.words = 10
+n.groups = ceiling(length(all.files) / n.words)
+groups = matrix(nrow=n.groups, ncol=n.words)
+
+for (i in 1:n.groups) {
+  if (length(all.files) < n.words) {
+    groups[i,1:length(all.files)] = all.files
+  } else {
+    groups[i,] = sample(all.files, n.words)
+  }
+  all.files = all.files[all.files %ni% groups[i,]]
+  
+  group.files = groups[i,!is.na(groups[i,])]
+  group.audio = lapply(group.files, readMP3)
+  audio = do.call("bind", group.audio)
+  cat("[", i, "]", groups[i,], "\n")
+  filename = group.files %>% str_remove_all("audio/|\\.mp3") %>% paste(collapse="_") %>% paste0(".wav")
+  writeWave(audio, file.path("groups", filename))
+}
+```
