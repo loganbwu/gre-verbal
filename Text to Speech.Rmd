@@ -24,7 +24,7 @@ output.xlsx = "oxford.xlsx"
 
 ```{r}
 words = read.xlsx(input.xlsx) %>%
-  filter(Keep==1) %>%
+  # filter(Keep==1) %>%
   select(-Keep)
 
 oxford.processed = read.xlsx(output.xlsx) %>%
@@ -50,8 +50,8 @@ glimpse(text)
 ```{r}
 for (i in 1:nrow(text)) {
   voice = sample(voice.names, 1)
-  country = voice %>% str_extract("AU|GB|US")
-  filename = file.path("audio", country, paste0(text$Word[[i]], ".mp3"))
+  # country = voice %>% str_extract("AU|GB|US")
+  filename = file.path("audio", paste0(text$Word[[i]], ".mp3"))
   if (!file.exists(filename)) {
     gl_talk(text$Script[[i]], name=voice, output=filename, audioEncoding = "MP3")
   }

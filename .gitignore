@@ -2,7 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
+.idea
 audio/*
 *.xlsx
-*.nb.html
+*.html
 *.json
